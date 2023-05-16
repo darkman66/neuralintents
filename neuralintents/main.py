@@ -6,7 +6,7 @@ import pickle
 import numpy as np
 import os
 
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 import nltk
 from nltk.stem import WordNetLemmatizer
@@ -15,35 +15,35 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout
 from tensorflow.keras.optimizers import SGD
 from tensorflow.keras.models import load_model
+from tensorflow.keras.optimizers.schedules import ExponentialDecay
 
-nltk.download('punkt', quiet=True)
-nltk.download('wordnet', quiet=True)
+nltk.download("punkt", quiet=True)
+nltk.download("wordnet", quiet=True)
+
 
 class IAssistant(metaclass=ABCMeta):
-
     @abstractmethod
     def train_model(self):
-        """ Implemented in child class """
+        """Implemented in child class"""
 
     @abstractmethod
     def request_tag(self, message):
-        """ Implemented in child class """
+        """Implemented in child class"""
 
     @abstractmethod
     def get_tag_by_id(self, id):
-        """ Implemented in child class """
+        """Implemented in child class"""
 
     @abstractmethod
     def request_method(self, message):
-        """ Implemented in child class """
+        """Implemented in child class"""
 
     @abstractmethod
     def request(self, message):
-        """ Implemented in child class """
+        """Implemented in child class"""
 
 
 class GenericAssistant(IAssistant):
-
     def __init__(self, intents, intent_methods={}, model_name="assistant_model"):
         self.intents = intents
         self.intent_methods = intent_methods
@@ -62,22 +62,20 @@ class GenericAssistant(IAssistant):
         self.words = []
         self.classes = []
         documents = []
-        ignore_letters = ['!', '?', ',', '.']
+        ignore_letters = ["!", "?", ",", "."]
 
-        for intent in self.intents['intents']:
-            for pattern in intent['patterns']:
+        for intent in self.intents["intents"]:
+            for pattern in intent["patterns"]:
                 word = nltk.word_tokenize(pattern)
                 self.words.extend(word)
-                documents.append((word, intent['tag']))
-                if intent['tag'] not in self.classes:
-                    self.classes.append(intent['tag'])
+                documents.append((word, intent["tag"]))
+                if intent["tag"] not in self.classes:
+                    self.classes.append(intent["tag"])
 
         self.words = [self.lemmatizer.lemmatize(w.lower()) for w in self.words if w not in ignore_letters]
         self.words = sorted(list(set(self.words)))
 
         self.classes = sorted(list(set(self.classes)))
-
-
 
         training = []
         output_empty = [0] * len(self.classes)
@@ -100,36 +98,37 @@ class GenericAssistant(IAssistant):
         train_y = list(training[:, 1])
 
         self.model = Sequential()
-        self.model.add(Dense(128, input_shape=(len(train_x[0]),), activation='relu'))
+        self.model.add(Dense(128, input_shape=(len(train_x[0]),), activation="relu"))
         self.model.add(Dropout(0.5))
-        self.model.add(Dense(64, activation='relu'))
+        self.model.add(Dense(64, activation="relu"))
         self.model.add(Dropout(0.5))
-        self.model.add(Dense(len(train_y[0]), activation='softmax'))
+        self.model.add(Dense(len(train_y[0]), activation="softmax"))
 
-        sgd = SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
-        self.model.compile(loss='categorical_crossentropy', optimizer=sgd, metrics=['accuracy'])
+        lr_schedule = ExponentialDecay(initial_learning_rate=0.01, decay_steps=10000, decay_rate=0.9)
+        sgd = SGD(learning_rate=lr_schedule)
+        self.model.compile(loss="categorical_crossentropy", optimizer=sgd, metrics=["accuracy"])
 
         self.hist = self.model.fit(np.array(train_x), np.array(train_y), epochs=200, batch_size=5, verbose=1)
 
     def save_model(self, model_name=None):
         if model_name is None:
             self.model.save(f"{self.model_name}.h5", self.hist)
-            pickle.dump(self.words, open(f'{self.model_name}_words.pkl', 'wb'))
-            pickle.dump(self.classes, open(f'{self.model_name}_classes.pkl', 'wb'))
+            pickle.dump(self.words, open(f"{self.model_name}_words.pkl", "wb"))
+            pickle.dump(self.classes, open(f"{self.model_name}_classes.pkl", "wb"))
         else:
             self.model.save(f"{model_name}.h5", self.hist)
-            pickle.dump(self.words, open(f'{model_name}_words.pkl', 'wb'))
-            pickle.dump(self.classes, open(f'{model_name}_classes.pkl', 'wb'))
+            pickle.dump(self.words, open(f"{model_name}_words.pkl", "wb"))
+            pickle.dump(self.classes, open(f"{model_name}_classes.pkl", "wb"))
 
     def load_model(self, model_name=None):
         if model_name is None:
-            self.words = pickle.load(open(f'{self.model_name}_words.pkl', 'rb'))
-            self.classes = pickle.load(open(f'{self.model_name}_classes.pkl', 'rb'))
-            self.model = load_model(f'{self.model_name}.h5')
+            self.words = pickle.load(open(f"{self.model_name}_words.pkl", "rb"))
+            self.classes = pickle.load(open(f"{self.model_name}_classes.pkl", "rb"))
+            self.model = load_model(f"{self.model_name}.h5")
         else:
-            self.words = pickle.load(open(f'{model_name}_words.pkl', 'rb'))
-            self.classes = pickle.load(open(f'{model_name}_classes.pkl', 'rb'))
-            self.model = load_model(f'{model_name}.h5')
+            self.words = pickle.load(open(f"{model_name}_words.pkl", "rb"))
+            self.classes = pickle.load(open(f"{model_name}_classes.pkl", "rb"))
+            self.model = load_model(f"{model_name}.h5")
 
     def _clean_up_sentence(self, sentence):
         sentence_words = nltk.word_tokenize(sentence)
@@ -154,16 +153,16 @@ class GenericAssistant(IAssistant):
         results.sort(key=lambda x: x[1], reverse=True)
         return_list = []
         for r in results:
-            return_list.append({'intent': self.classes[r[0]], 'probability': str(r[1])})
+            return_list.append({"intent": self.classes[r[0]], "probability": str(r[1])})
         return return_list
 
     def _get_response(self, ints, intents_json):
         try:
-            tag = ints[0]['intent']
-            list_of_intents = intents_json['intents']
+            tag = ints[0]["intent"]
+            list_of_intents = intents_json["intents"]
             for i in list_of_intents:
-                if i['tag']  == tag:
-                    result = random.choice(i['responses'])
+                if i["tag"] == tag:
+                    result = random.choice(i["responses"])
                     break
         except IndexError:
             result = "I don't understand!"
@@ -181,7 +180,7 @@ class GenericAssistant(IAssistant):
     def request(self, message):
         ints = self._predict_class(message)
 
-        if ints[0]['intent'] in self.intent_methods.keys():
-            self.intent_methods[ints[0]['intent']]()
+        if ints[0]["intent"] in self.intent_methods.keys():
+            self.intent_methods[ints[0]["intent"]]()
         else:
             return self._get_response(ints, self.intents)

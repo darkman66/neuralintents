@@ -71,3 +71,10 @@ while not done:
 ]
 }
 ```
+
+# code
+
+```sh
+$ pip install pre-commit
+$ pre-commit install
+```
